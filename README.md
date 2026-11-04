@@ -1,176 +1,132 @@
-## ![OpenRGB](Documentation/Images/OpenRGB.png "OpenRGB Logo")
+# OpenRGB with AULA GS8 support
 
-![Pipeline Status](https://gitlab.com/CalcProgrammer1/OpenRGB/badges/master/pipeline.svg)
+This repository is a fork of [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) that adds a native
+controller for the **AULA GS8** USB gaming soundbar.
 
-One of the biggest complaints about RGB is the software ecosystem surrounding it.  Every manufacturer has their own app, their own brand, their own style.  If you want to mix and match devices, you end up with a ton of conflicting, functionally identical apps competing for your background resources.  On top of that, these apps are proprietary and Windows-only.  Some even require online accounts.  What if there was a way to control all of your RGB devices from a single app, on Windows, Linux, and MacOS, without any nonsense?  That is what OpenRGB sets out to achieve.  One app to rule them all.
+> **Not affiliated with the OpenRGB project.** This is an independent fork maintained for the purpose
+> of adding AULA GS8 support. The upstream OpenRGB project and its authors are not responsible for
+> this build. For the official OpenRGB releases, see <https://openrgb.org>.
 
-## Features
+## What this fork adds
 
-* Set colors and select effect modes for a wide variety of RGB hardware
-* Save and load profiles
-* Control lighting from third party software using the OpenRGB SDK
-* Command line interface
-* Connect multiple instances of OpenRGB to synchronize lighting across multiple PCs
-* Can operate standalone or in a client/headless server configuration
-* View device information
-* No official/manufacturer software required
-* Graphical view of device LEDs makes creating custom patterns easy
+A new `AulaGS8Controller` under `Controllers/AulaGS8Controller/` that talks to the AULA GS8's
+lighting MCU over a 16-byte HID output report (VID `0x3654`, PID `0x0517`, interface 3, collection
+`COL02`). The controller exposes 22 addressable LEDs in **Direct** mode only; the speaker's built-in
+dynamic effects are driven by its own firmware and cannot be selected from the host.
 
-![OpenRGB_Device_View](Documentation/Images/OpenRGB_Screenshot.png "OpenRGB Device View Screenshot")
+The protocol was reverse engineered from USB captures of the AULA "Shenguang" sync application.
 
-## Website
+- `AulaGS8Controller.h` / `.cpp` — low-level HID driver
+- `AulaGS8ControllerDetect.cpp` — detector
+- `RGBController_AulaGS8.h` / `.cpp` — OpenRGB device binding
 
-* Check out our website at [openrgb.org](https://openrgb.org)
+## Upstream baseline
 
-## Supported Devices
+This fork is based on OpenRGB commit
 
-* See the [Supported Devices](https://openrgb.org/devices.html) page for the current list of supported devices.
+```
+c6fc801
+```
 
-## WARNING!
+from `https://gitlab.com/CalcProgrammer1/OpenRGB`. The original upstream README is preserved as
+[`README-upstream.md`](README-upstream.md).
 
-This project interacts directly with hardware using reverse engineered protocols.  While we do our best to make sure we're sending the right data, there is always some risk in sending data to hardware when we don't understand exactly how that hardware works.  There have been issues in the past with certain hardware getting damaged/bricked and we have either disabled or fixed the offending code.  That said, with OpenRGB always changing and the landscape of RGB devices being of widely varying quality, we can't guarantee it won't happen again.  By installing and using OpenRGB you accept this risk.
+## Supported platforms
 
-## Download OpenRGB
+The controller uses the cross-platform `hidapi` and has no OS-specific calls other than a
+case-insensitive path comparison in the detector (needed because hidapi returns mixed-case paths on
+Windows). It should build and run on Windows, Linux, and macOS, though it has only been tested on
+Windows so far.
 
-  * Pre-built binaries are available for the following platforms:
-    * Windows
-    * Linux (AppImage, .deb, and .rpm)
-    * MacOS
-  * Released versions are available to download on [OpenRGB.org](https://openrgb.org/releases.html) or under [Releases](https://gitlab.com/CalcProgrammer1/OpenRGB/-/releases/permalink/latest).
-  * Experimental (aka Pipeline) versions are available to download on [OpenRGB.org](https://openrgb.org/index.html#pl).
-  * On Windows, you will need the **Microsoft Visual 2019 C++ runtime** installed.  You can get it [here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-supported-redistributable-version).
-  * An official Flatpak release is [available on Flathub](https://flathub.org/apps/details/org.openrgb.OpenRGB)
-    * Note: If using the AppImage or Flatpak versions, ensure you [install the latest udev rules](Documentation/UdevRules.md).
-  * Released versions are officially packaged for various distributions including Alpine, Fedora, and Arch.
-  * Arch users can also install from the [Extra repository](https://archlinux.org/packages/extra/x86_64/openrgb/) or from the AUR for the [pipeline](https://aur.archlinux.org/packages/openrgb-git/) version.
+## Building
 
-## Compile OpenRGB
+This fork ships the same build system as upstream. On Windows the maintainer builds with the
+MSYS2 MinGW64 toolchain and Qt 5.15.
 
-  * Instructions for compiling from source are [available here](Documentation/Compiling.md).
+### Windows (MSYS2 MinGW64)
 
-## Setup Device Access
+```sh
+pacman -S --needed mingw-w64-x86_64-qt5 mingw-w64-x86_64-hidapi \
+    mingw-w64-x86_64-libusb mingw-w64-x86_64-mbedtls \
+    mingw-w64-x86_64-toolchain make
 
-  * After installing OpenRGB, please see the [SMBus Access](Documentation/SMBusAccess.md) and [USB Access](Documentation/USBAccess.md) pages for instructions on setting up access to your RGB devices.
+qmake OpenRGB.pro
+make -j$(nproc)
+```
 
-## Join Our Discord
+The resulting binary is `release/OpenRGB.exe`.
 
-* https://discord.gg/AQwjJPY
+### Linux
 
-## Follow Us On Mastodon
+```sh
+sudo apt install qtbase5-dev libqt5svg5-dev libhidapi-dev libusb-1.0-0-dev \
+    libmbedtls-dev build-essential pkg-config
 
-* https://floss.social/@OpenRGB
+qmake OpenRGB.pro
+make -j$(nproc)
+```
 
-## Visit Our Lemmy Community
+### macOS
 
-* https://lemmy.ml/c/OpenRGB
+```sh
+brew install qt@5 hidapi libusb mbedtls
+$(brew --prefix qt@5)/bin/qmake OpenRGB.pro
+make -j$(sysctl -n hw.ncpu)
+```
 
-## How-Tos and FAQs
+## Usage
 
-* [Windows Setup and Usage](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/User-Documentation/OpenRGB-Windows-Setup-and-Usage.md)
-* [Frequently Asked Questions](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/User-Documentation/Frequently-Asked-Questions.md)
+1. Plug in the AULA GS8.
+2. Start `OpenRGB`. The speaker should appear in the device list as **AULA GS8**.
+3. Use the GUI, the command line, or the OpenRGB SDK to set colors.
 
-## Support OpenRGB
+### Headless SDK server
 
-* OpenRGB is a project I created to solve a problem I had with the RGB ecosystem.  My goal isn't to make money off of this project.  That said, people have requested to donate, and donations allow me to buy more RGB stuff to reverse engineer.
-* [Donate via PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=4VPTFMD3G4QVG&item_name=OpenRGB+Development&currency_code=USD&source=url)
-* [Become a Patron](https://www.patreon.com/CalcProgrammer1) (I'm not doing any Patreon-exclusive content, it's purely for donation)
-* Donate via Bitcoin: 1N83YPu7btXYadPS1neB9zX7X1QTdpyZQ
+```sh
+OpenRGB.exe --server --server-port 6742 --startminimized --noautoconnect
+```
 
-## History of OpenRGB
+## Third-party components and licenses
 
-* OpenRGB is a continuation of OpenAuraSDK, which itself was created out of reverse engineering work done on the Keyboard Visualizer project.  For a complete history of the RGB projects that led to OpenRGB's creation, see the [History page](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/History-of-OpenRGB.md).
+This fork redistributes the OpenRGB source tree under the terms of the
+[GNU General Public License v2.0 or later](LICENSE). In addition, the build depends on several
+third-party libraries whose licenses are reproduced in their respective directories:
 
-## Contributing
+| Component | License |
+|-----------|---------|
+| Qt 5 | LGPL-3.0 |
+| libusb | LGPL-2.1 |
+| hidapi (with hotplug patch) | GPL-3.0 / HIDAPI license (see `dependencies/hidapi`) |
+| mbedTLS | Apache-2.0 |
+| hueplusplus | LGPL-3.0 |
+| cpp-httplib | MIT |
+| nlohmann/json | MIT |
+| PawnIO | See `dependencies/pawnio` |
 
-* Want to contribute support for a new device?  Check out the [RGBController API](Documentation/RGBControllerAPI.md) page for documentation of how OpenRGB implements device control.
-* Want to create a new OpenRGB SDK client implementation?  Check out the [OpenRGB SDK Documentation](Documentation/OpenRGBSDK.md) page for documentation of how the OpenRGB SDK network protocol functions.
-* Please read the [Contributing Guidelines](CONTRIBUTING.md) before starting work on your new changes.
+No additional third-party code was introduced by this fork beyond what upstream already includes.
 
-## OpenRGB SDK
+## Modifications to upstream files
 
-* OpenRGB provides a network interface for controlling supported RGB devices from other software.  These projects implement the OpenRGB SDK and provide additional ways for you to control your lighting setup.
+In addition to the new files under `Controllers/AulaGS8Controller/`, the following upstream files
+were modified to register the controller:
 
-  * [OpenRGB Python Client](https://github.com/jath03/openrgb-python) (by jath03)
-  * [OpenRGB Python Client (deprecated)](https://github.com/bahorn/OpenRGB-PyClient) (by bahorn)  
-  * [OpenRGB Node.js Client](https://github.com/vlakreeh/openrgb) (by vlakreeh)
-  * [D-Bus Connector for OpenRGB](https://github.com/Vinno97/OpenRGB-DBus-Connector) (by Vinno97)
-  * [OpenRGB.NET - C# OpenRGB Client](https://github.com/diogotr7/OpenRGB.NET) (by diogotr7)
-  * [OpenRGB-Client - Java Client](https://gitlab.com/mguimard/openrgb-client) (by morg)
-  * [OpenRGB-SDK - NodeJS client](https://www.npmjs.com/package/openrgb-sdk) (by Mola19)
-  * [OpenRGB-cppSDK - C++ client](https://github.com/Youda008/OpenRGB-cppSDK) (by Youda008)
-  * [openrgb-rs2 - Rust client](https://github.com/Achtuur/openrgb-rs2) (by nicoulaj & Achtuur)
+- `OpenRGB.pro` — added the new controller sources and headers
+- `Controllers/ControllerDetector.cpp` / `ControllerDetector.h` — registered the detector
 
-## Applications Supporting OpenRGB SDK
+Each modified file keeps its original copyright header; the changes are marked in the usual way.
 
-* While OpenRGB itself only provides control over the lighting effects built into hardware, several open source applications can use the OpenRGB SDK to provide synchronized lighting effects for your devices.
+## Reverting to upstream
 
-  * [Keyboard Visualizer](https://gitlab.com/CalcProgrammer1/KeyboardVisualizer) (by CalcProgrammer1)
-  * [OpenRGB E1.31 Receiver](https://gitlab.com/CalcProgrammer1/OpenRGBE131Receiver) (by me)
-  * [Aurora](https://github.com/Aurora-RGB/Aurora) (OpenRGB support added by diogotr7)
-  * [Artemis](https://github.com/Artemis-RGB/Artemis) (OpenRGB support added by diogotr7)
-  * [RemoteLight](https://github.com/Drumber/RemoteLight) (by Drumber, requires OpenRGB plugin)
-  * [OpenRGB-python-FX](https://github.com/herosilas12/OpenRGB-python-FX) (by herosilas12)
-  * [AllMyLights](https://github.com/sparten11740/allmylights) (by sparten11740)
-  * [OpenRGBRemote](https://gitlab.com/mguimard/openrgbremote) (by morg)
-  * [PiLED](https://github.com/PolisanTheEasyNick/PiLED) (by PolisanTheEasyNick)
+To remove this fork's changes and go back to a stock OpenRGB build, check out the baseline commit:
 
-## OpenRGB Plugins
+```sh
+git checkout c6fc801
+```
 
-* OpenRGB provides a plugin interface for adding features to the OpenRGB application.  The following projects provide additional functionality in the form of plugins.
+or simply remove the `Controllers/AulaGS8Controller/` directory and revert the detector
+registration in `ControllerDetector`.
 
-  * [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) (by herosilas12, morg)
-  * [OpenRGB Visual Map Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBVisualMapPlugin) (by morg)
-  * [OpenRGB E1.31 Receiver Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBE131ReceiverPlugin) (by CalcProgrammer1)
-  * [OpenRGB Scheduler Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBSchedulerPlugin) (by morg)
-  * [OpenRGB Skin Plugin](https://gitlab.com/OpenRGBDevelopers/openrgbskinplugin) (by morg)
-  * [OpenRGB Hardware Sync Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBHardwareSyncPlugin) (by morg)
-  * [OpenRGB Http Hook Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBHttpHookPlugin) (by morg)
-  * [OpenRGB Razer Extras Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBRazerExtrasPlugin) (by morg)
-  * [OpenRGB Fan Hardware Sync Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBFanSyncPlugin) (by Shady)
-  * [OpenRGB Ambient Plugin](https://github.com/krojew/OpenRGB-Ambient) (by krojew)
+## License
 
-## Projects Used
-
-* OpenRGB directly relies upon these projects.
-  * PawnIO: https://pawnio.eu/
-  * libusb: https://github.com/libusb/libusb
-  * hidapi: https://github.com/libusb/hidapi
-  * libe131: https://github.com/hhromic/libe131
-  * NVFC: https://github.com/graphitemaster/NVFC
-  * Qt-Plus (ColorWheel): https://github.com/liuyanghejerry/Qt-Plus
-  * AMD ADL Libraries: https://github.com/GPUOpen-LibrariesAndSDKs/display-library
-  * hueplusplus: https://github.com/enwi/hueplusplus
-  * httplib: https://github.com/yhirose/cpp-httplib
-  * mdns: https://github.com/mjansson/mdns
-  * macUSPCIO: https://github.com/ShadyNawara/macUSPCIO
-
-## Projects Researched
-
-* While no code from these projects directly made its way into OpenRGB, these projects have been invaluable resources for protocol information.
-
-  * OpenRazer: https://github.com/openrazer/openrazer
-  * OpenRazer-Win32: https://github.com/CalcProgrammer1/openrazer-win32
-  * ckb-next: https://github.com/ckb-next/ckb-next
-  * linux_thermaltake_riing: https://github.com/chestm007/linux_thermaltake_riing
-  * Aura Addressable Header Controller: https://gitlab.com/cneil02/aura-addressable-header-controller
-  * OpenPyAURA: https://gitlab.com/thelastguardian/openpyaura
-  * AsrLed: https://github.com/EUA/AsrLed
-  * asrock-leds: https://github.com/RattyDAVE/asrock-leds
-  * hue-plus: https://github.com/kusti8/hue-plus
-  * rogauracore: https://github.com/wroberts/rogauracore
-  * msi-rgb: https://github.com/nagisa/msi-rgb
-  * OpenCorsairLink: https://github.com/audiohacked/OpenCorsairLink
-  * msi-keyboard: https://github.com/bparker06/msi-keyboard
-  * rivalcfg: https://github.com/flozz/rivalcfg
-  * VRMTool: https://github.com/rbrune/VRMtool
-  * g810-led: https://github.com/MatMoul/g810-led
-  * liquidctl: https://github.com/jonasmalacofilho/liquidctl
-  * kraken-unleashed: https://github.com/Cesarsk/kraken-unleashed
-  * Annemone: https://github.com/manualmanul/Annemone
-  * libcmmk: https://github.com/chmod222/libcmmk
-  * Signal RGB Plugins: https://gitlab.com/signalrgb/signal-plugins/-/tree/master/Plugins
-  * k550-macos: https://github.com/vookimedlo/ck550-macos/tree/master
-  * luxafor-python: https://github.com/vmitchell85/luxafor-python
-  * dreamcheekyusb: https://github.com/gbrayut/dreamcheekyusb
-  * omen-light: https://github.com/chiahsing/omen-light
-  
+This fork is distributed under the same license as upstream OpenRGB:
+**GNU General Public License v2.0 or later**. See [LICENSE](LICENSE) for the full text.

@@ -22,6 +22,16 @@
 #include <cstdlib>
 #include <ctime>
 
+/*---------------------------------------------------------*\
+| MinGW has no setenv/unsetenv, map them onto the CRT        |
+| equivalents so the timezone handling compiles on Windows.  |
+\*---------------------------------------------------------*/
+#ifdef _WIN32
+#include <stdlib.h>
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#define unsetenv(name)                 _putenv_s(name, "")
+#endif
+
 #include <hueplusplus/HueExceptionMacro.h>
 #include <hueplusplus/TimePattern.h>
 

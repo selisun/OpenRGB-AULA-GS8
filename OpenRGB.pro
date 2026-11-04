@@ -1,4 +1,5 @@
 #-----------------------------------------------------------------------------------------------#
+#-----------------------------------------------------------------------------------------------#
 # OpenRGB 0.x QMake Project                                                                     #
 #                                                                                               #
 #   Adam Honse (CalcProgrammer1)                        5/25/2020                               #
@@ -15,10 +16,7 @@ QT +=                                                                           
 # Set compiler to use C++17 to make std::filesystem available                                   #
 #-----------------------------------------------------------------------------------------------#
 CONFIG +=   c++17                                                                               \
-            lrelease                                                                            \
-            embed_translations                                                                  \
             silent                                                                              \
-            precompile_header                                                                   \
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -29,10 +27,35 @@ MAJOR       = 1
 MINOR       = 1
 SUFFIX      = git
 
-SHORTHASH   = $$system("git rev-parse --short=7 HEAD")
-LASTTAG     = "release_"$$MAJOR"."$$MINOR
-COMMAND     = "git rev-list --count "$$LASTTAG"..HEAD"
-COMMITS     = $$system($$COMMAND)
+#-----------------------------------------------------------------------------------------------#
+# Git detection with fallbacks                                                                  #
+#                                                                                               #
+# Not every build environment has git available or a usable .git directory (source tarballs,    #
+# shallow clones, restricted PATH).  Detect once and fall back to static values so qmake never   #
+# ends up with an empty version component.                                                      #
+#-----------------------------------------------------------------------------------------------#
+GIT_AVAILABLE = $$system(git --version)
+
+# A usable git binary is not enough, the source tree must also be a real repository.
+# Source snapshots and clones with a stripped .git directory fall back to static values.
+GIT_REPO = $$system("git rev-parse --is-inside-work-tree")
+
+!equals(GIT_REPO, "true") {
+    GIT_AVAILABLE =
+}
+
+isEmpty(GIT_AVAILABLE) {
+    SHORTHASH   = unknown
+    COMMITS     = 0
+} else {
+    LASTTAG     = "release_"$$MAJOR"."$$MINOR
+
+    SHORTHASH   = $$system("git rev-parse --short=7 HEAD")
+    isEmpty(SHORTHASH): SHORTHASH = unknown
+
+    COMMITS     = $$system("git rev-list --count "$$LASTTAG"..HEAD")
+    isEmpty(COMMITS): COMMITS = 0
+}
 
 VERSION_NUM = $$MAJOR"."$$MINOR"."$$COMMITS
 VERSION_STR = $$MAJOR"."$$MINOR
@@ -60,20 +83,42 @@ TARGET      = OpenRGB
 TEMPLATE    = app
 
 #-----------------------------------------------------------------------------------------------#
+# Disable include based dependency scanning                                                     #
+#                                                                                               #
+# qmake defaults DEPENDPATH to INCLUDEPATH, which for this project contains one directory per   #
+# controller (several hundred entries).  Resolving the includes of all sources against that list #
+# makes qmake spend tens of minutes on Makefile generation before any compiling starts.          #
+# Clearing DEPENDPATH and depend_includepath skips that scan; the compiler still generates its   #
+# own header dependencies.                                                                      #
+#-----------------------------------------------------------------------------------------------#
+DEPENDPATH =
+CONFIG -= depend_includepath
+
+#-----------------------------------------------------------------------------------------------#
 # Automatically generated build information                                                     #
 #-----------------------------------------------------------------------------------------------#
 win32:BUILDDATE         = $$system(date /t)
 linux:BUILDDATE         = $$system(date -R -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}")
 freebsd:BUILDDATE       = $$system(date -j -R -r "${SOURCE_DATE_EPOCH:-$(date +%s)}")
 macx:BUILDDATE          = $$system(date -j -R -r "${SOURCE_DATE_EPOCH:-$(date +%s)}")
-GIT_COMMIT_ID           = $$system(git log -n 1 --pretty=format:"%H")
-GIT_COMMIT_DATE         = $$system(git log -n 1 --pretty=format:"%ci")
+isEmpty(GIT_AVAILABLE) {
+    GIT_COMMIT_ID       = unknown
+    GIT_COMMIT_DATE     = unknown
+    GIT_BRANCH          = unknown
+} else {
+    GIT_COMMIT_ID       = $$system(git log -n 1 --pretty=format:"%H")
+    isEmpty(GIT_COMMIT_ID): GIT_COMMIT_ID = unknown
 
-unix {
-    GIT_BRANCH          = $$system(sh scripts/git-get-branch.sh)
-}
-else {
-    GIT_BRANCH          = $$system(powershell -ExecutionPolicy Bypass -File scripts/git-get-branch.ps1)
+    GIT_COMMIT_DATE     = $$system(git log -n 1 --pretty=format:"%ci")
+    isEmpty(GIT_COMMIT_DATE): GIT_COMMIT_DATE = unknown
+
+    unix {
+        GIT_BRANCH      = $$system(sh scripts/git-get-branch.sh)
+    }
+    else {
+        GIT_BRANCH      = $$system(powershell -ExecutionPolicy Bypass -File scripts/git-get-branch.ps1)
+    }
+    isEmpty(GIT_BRANCH): GIT_BRANCH = unknown
 }
 
 DEFINES +=                                                                                      \
@@ -98,6 +143,12 @@ GUI_INCLUDES        = $$unique(GUI_INCLUDES)
 
 CONTROLLER_H        = $$files("Controllers/*.h", true)
 CONTROLLER_CPP      = $$files("Controllers/*.cpp", true)
+CONTROLLER_H        -= $$files("Controllers/_flatinc/*.h", true)
+CONTROLLER_CPP      -= $$files("Controllers/_flatinc/*.cpp", true)
+
+# SinowealthControllerDetect.cpp #includes GenesisXenon200Controller.cpp directly, so compiling
+# the same file as a separate translation unit produces duplicate symbols at link time.
+CONTROLLER_CPP      -= Controllers/SinowealthController/GenesisXenon200Controller/GenesisXenon200Controller.cpp
 
 for(iter, $$list($$CONTROLLER_H)) {
     CONTROLLER_INCLUDES += $$dirname(iter)
@@ -131,11 +182,18 @@ CONTROLLER_CPP         -= $$CONTROLLER_CPP_MACOS
 HID_HOTPLUG_ENABLED = "false"
 
 #-----------------------------------------------------------------------------------------------#
-# OpenRGB Common                                                                                #
+#-----------------------------------------------------------------------------------------------#
+# Controller headers are exposed through a flat include directory                               #
+#                                                                                               #
+# Controller sources include headers that live in sibling controller directories.  Adding all    #
+# 340 directories to the search path makes every compile command ~20 kB (past the 8191          #
+# character cmd.exe limit) and makes gcc stat hundreds of directories for every include, which   #
+# slows the build down by a factor of ten.  build2.sh therefore hardlinks every controller       #
+# header into _flatinc/ so a single -I entry covers all of them.                                 #
 #-----------------------------------------------------------------------------------------------#
 INCLUDEPATH +=                                                                                  \
-    $$CONTROLLER_INCLUDES                                                                       \
     $$GUI_INCLUDES                                                                              \
+    Controllers/_flatinc                                                                        \
     dependencies/ColorWheel                                                                     \
     dependencies/CRCpp/                                                                         \
     dependencies/hueplusplus-1.2.0/include                                                      \
@@ -274,9 +332,6 @@ SOURCES +=                                                                      
     RGBController/RGBController_Network.cpp                                                     \
     RGBController/RGBController_Virtual.cpp                                                     \
 
-PRECOMPILED_HEADER +=                                                                           \
-    precompiled_header.h                                                                        \
-
 RESOURCES +=                                                                                    \
     qt/resources.qrc                                                                            \
 
@@ -330,12 +385,56 @@ TRANSLATIONS +=                                                                 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
 #-----------------------------------------------------------------------------------------------#
-win32:QMAKE_CXXFLAGS += /utf-8
+win32-msvc*:QMAKE_CXXFLAGS += /utf-8
+mingw:QMAKE_CXXFLAGS += -finput-charset=UTF-8
+#-----------------------------------------------------------------------------------------------#
+# Use the binutils copies from the Qt bin directory                                             #
+#                                                                                               #
+# g++ resolves as and ld to x86_64-w64-mingw32/bin first.  Those copies cannot load their       #
+# libintl dependency on this MSYS2 installation and die with STATUS_ENTRYPOINT_NOT_FOUND before #
+# gcc can report anything.  The identical copies in the Qt bin directory load fine, so point    #
+# the compiler and linker at that directory with -B.                                            #
+#-----------------------------------------------------------------------------------------------#
+mingw:QMAKE_CXXFLAGS += -B$$shell_quote($$[QT_INSTALL_BINS])
+mingw:QMAKE_LFLAGS   += -B$$shell_quote($$[QT_INSTALL_BINS])
+mingw:QMAKE_CFLAGS    += -B$$shell_quote($$[QT_INSTALL_BINS])
+
+#-----------------------------------------------------------------------------------------------#
+# Architecture detection for MinGW                                                              #
+#                                                                                               #
+# The msvc specs set QMAKE_TARGET.arch, and the Windows library and PawnIO source blocks below  #
+# key off of it.  The mingw specs leave it empty, so every Windows import library (ws2_32,       #
+# libusb, hidapi, mbedTLS, PawnIO) as well as the x64-only PawnIO sources were silently skipped, #
+# which only shows up as thousands of undefined references at link time.  Derive the value from #
+# the Qt architecture instead.                                                                  #
+#-----------------------------------------------------------------------------------------------#
+win32:isEmpty(QMAKE_TARGET.arch):contains(QT_ARCH, x86_64) {
+    QMAKE_TARGET.arch = x86_64
+}
+win32:isEmpty(QMAKE_TARGET.arch):contains(QT_ARCH, i386) {
+    QMAKE_TARGET.arch = x86
+}
+
+#-----------------------------------------------------------------------------------------------#
+# Windows system libraries imported explicitly                                                  #
+#                                                                                               #
+# MSVC picks these up from #pragma comment(lib, ...) in the SDK headers, MinGW does not.        #
+#-----------------------------------------------------------------------------------------------#
+mingw:LIBS +=                                                                                   \
+    -lole32                                                                                     \
+    -loleaut32                                                                                  \
+    -luuid                                                                                      \
+    -lwbemuuid                                                                                  \
+    -ladvapi32                                                                                  \
+    -lsetupapi                                                                                  \
+    -luser32                                                                                    \
+    -lgdi32                                                                                     \
+    -ldwmapi                                                                                    \
+
 win32:INCLUDEPATH +=                                                                            \
     dependencies/display-library/include                                                        \
     dependencies/hidapi-hotplug-win/include                                                     \
     dependencies/libusb-1.0.27/include                                                          \
-    dependencies/mbedtls-3.2.1/include                                                          \
     dependencies/NVFC                                                                           \
     dependencies/PawnIO                                                                         \
     i2c_smbus/Windows                                                                           \
@@ -390,11 +489,10 @@ win32:contains(QMAKE_TARGET.arch, x86_64) {
         super_io/super_io_pawnio.cpp                                                            \
 
     LIBS +=                                                                                     \
-        -lws2_32                                                                                \
-        -liphlpapi                                                                              \
         -L"$$PWD/dependencies/libusb-1.0.27/VS2019/MS64/dll" -llibusb-1.0                       \
         -L"$$PWD/dependencies/hidapi-hotplug-win/x64/" -lhidapi-hotplug                         \
-        -L"$$PWD/dependencies/mbedtls-3.2.1/lib/x64/" -lmbedcrypto -lmbedtls -lmbedx509         \
+        $$[QT_INSTALL_LIBS]/libmbedtls.a $$[QT_INSTALL_LIBS]/libmbedx509.a $$[QT_INSTALL_LIBS]/libmbedcrypto.a -lws2_32 -liphlpapi \
+        -lbcrypt                                                                                \
         -L"$$PWD/dependencies/PawnIO/" -lPawnIOLib                                              \
 }
 
@@ -403,11 +501,10 @@ win32:contains(QMAKE_TARGET.arch, x86) {
         super_io/super_io.cpp                                                                   \
 
     LIBS +=                                                                                     \
-        -lws2_32                                                                                \
-        -liphlpapi                                                                              \
         -L"$$PWD/dependencies/libusb-1.0.27/VS2019/MS32/dll" -llibusb-1.0                       \
         -L"$$PWD/dependencies/hidapi-hotplug-win/x86/" -lhidapi-hotplug                         \
-        -L"$$PWD/dependencies/mbedtls-3.2.1/lib/x86/" -lmbedcrypto -lmbedtls -lmbedx509         \
+        $$[QT_INSTALL_LIBS]/libmbedtls.a $$[QT_INSTALL_LIBS]/libmbedx509.a $$[QT_INSTALL_LIBS]/libmbedcrypto.a -lws2_32 -liphlpapi \
+        -lbcrypt                                                                                \
 }
 
 win32:DEFINES -=                                                                                \
@@ -416,6 +513,8 @@ win32:DEFINES -=                                                                
 win32:DEFINES +=                                                                                \
     _MBCS                                                                                       \
     WIN32                                                                                       \
+    _WIN32_WINNT=0x0A00                                                                         \
+    WINVER=0x0A00                                                                               \
     _CRT_SECURE_NO_WARNINGS                                                                     \
     _WINSOCK_DEPRECATED_NO_WARNINGS                                                             \
     WIN32_LEAN_AND_MEAN                                                                         \
@@ -830,6 +929,13 @@ macx:contains(QMAKE_HOST.arch, x86_64) {
     DEFINES +=                                                                                  \
     _MACOSX_X86_X64                                                                             \
 }
+
+#-----------------------------------------------------------------------------------------------#
+# MinGW link order                                                                              #
+#                                                                                               #
+# Archives are searched from left to right, so ws2_32 must come after the static mbedTLS        #
+# archives: their object files reference inet_pton, which only ws2_32 provides.                 #
+#-----------------------------------------------------------------------------------------------#
 
 #-----------------------------------------------------------------------------------------------#
 # Print build configuration                                                                     #

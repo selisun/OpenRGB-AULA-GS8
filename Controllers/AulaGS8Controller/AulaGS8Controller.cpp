@@ -3,6 +3,8 @@
 |                                                           |
 |   Driver for AULA GS8 USB speaker RGB lighting            |
 |                                                           |
+|   selisun                                     04 Nov 2026 |
+|                                                           |
 |   This file is part of the OpenRGB project                |
 |   SPDX-License-Identifier: GPL-2.0-or-later               |
 \*---------------------------------------------------------*/
