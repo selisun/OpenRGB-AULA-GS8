@@ -3,9 +3,10 @@
 This repository is a fork of [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) that adds a native
 controller for the **AULA GS8** USB gaming soundbar.
 
-> **Not affiliated with the OpenRGB project.** This is an independent fork maintained for the purpose
-> of adding AULA GS8 support. The upstream OpenRGB project and its authors are not responsible for
-> this build. For the official OpenRGB releases, see <https://openrgb.org>.
+> **Not affiliated with the OpenRGB project, and not affiliated with AULA either.** This is an
+> independent fork maintained for the purpose of adding AULA GS8 support. Neither the upstream
+> OpenRGB project nor AULA endorses this build or is responsible for it. For the official OpenRGB
+> releases, see <https://openrgb.org>.
 
 ## Download
 
@@ -172,8 +173,9 @@ This fork is distributed under the same license as upstream OpenRGB:
 本仓库是 [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) 的衍生分支，为 **AULA GS8** USB 游戏音箱
 新增了原生控制器。
 
-> **本项目与 OpenRGB 官方无关。** 这是一个独立维护的衍生分支，目的只是增加 AULA GS8 支持。
-> OpenRGB 官方项目及其作者不对本构建负责。官方版本请访问 <https://openrgb.org>。
+> **本项目与 OpenRGB 官方无关，也与 AULA（狼蛛）无关。** 这是一个独立维护的衍生分支，目的只是增加
+> AULA GS8 支持。OpenRGB 官方与 AULA 均未参与本构建，也不对其负责。官方版本请访问
+> <https://openrgb.org>。
 
 ## 下载
 
