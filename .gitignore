@@ -122,3 +122,15 @@ compile_commands.json
 
 # Generated i18n files
 *.qm
+
+# --- Local build additions for this fork (MinGW / Qt6) ---
+Controllers/_flatinc/
+build-qt6/
+build2.sh
+qmake*.log
+build*.log
+*.rsp
+probe*.rc
+_*.sh
+_*.txt
+_*.cpp
